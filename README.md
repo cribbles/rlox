@@ -9,7 +9,7 @@ interpreter itself has been adapted to be more ruby-like, where germane.
 
 ## Features
 
-- [ ] Scanner
+- [x] Scanner
 - [ ] AST
 - [ ] Parser
 - [ ] Evaluations
