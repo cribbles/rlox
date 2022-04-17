@@ -12,7 +12,7 @@ class Lox
     def cli(*args)
       if args.length > 1
         puts "Usage: rlox [script]"
-        exit EXIT_CODES.USAGE
+        exit EXIT_CODES[:USAGE]
       elsif args.length == 1
         run_file(args.first)
       else
@@ -31,7 +31,7 @@ class Lox
 
     def run_file(path)
       run File.read(path)
-      exit EXIT_CODES.DATA_ERROR if had_error?
+      exit EXIT_CODES[:DATA_ERROR] if had_error?
     end
 
     def error(line, message)
