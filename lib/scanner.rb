@@ -1,6 +1,10 @@
 require './token'
 require './token_types'
 
+class LexicalError < Struct.new(:line, :message)
+  alias_method :attributes, :deconstruct
+end
+
 class Scanner
   TOKEN_TYPE_KEYWORD_LITERALS = (
     TOKEN_TYPE_KEYWORDS.to_h { |kw| [kw.to_s.downcase, kw] }
@@ -43,34 +47,58 @@ class Scanner
 
   def initialize(source)
     @source = source
-    @tokens = []
     @start = 0
     @current = 0
     @line = 1
   end
 
   def scan_tokens
-    until at_end?
-      self.start = current
-      scan_token
-    end
+    tokens = []
+    errors = []
+  
+    scan(
+      token: ->(result) { tokens << result },
+      error: ->(result) { errors << result }
+    )
+  
+    { tokens: tokens, errors: errors }
+  end
 
-    tokens << Token.new(TOKEN_TYPES[:EOF], "", nil, line)
+  def each_token
+    scan(
+      token: ->(result) { yield token: result },
+      error: ->(result) { yield error: result }
+    )
   end
 
   private
 
   attr_reader :source
-  attr_accessor :tokens, :start, :current, :line
+  attr_accessor :start, :current, :line
+
+  def scan(token:, error:)
+    until at_end?
+      case result = scan_token
+      when Token
+        token.(result)
+      when LexicalError
+        error.(result.attributes)
+      else
+        next
+      end
+    end
+    token.(eof)
+  end
 
   def at_end?
     current >= source.length
   end
 
   def scan_token
+    self.start = current
     case char = advance
     when TOKEN_TYPE_SINGLE_CHAR_REGEXP
-      add_token(TOKEN_TYPE_SINGLE_CHAR_LITERALS[char])
+      token(TOKEN_TYPE_SINGLE_CHAR_LITERALS[char])
     when WHITESPACE_CHAR_REGEXP
       # do nothing
     when NUMERIC_CHAR_REGEXP
@@ -80,31 +108,23 @@ class Scanner
     when "\n"
       self.line += 1
     when '!'
-      add_token(
-        match('=') ? TOKEN_TYPES[:BANG_EQUAL] : TOKEN_TYPES[:BANG]
-      )
+      token(match('=') ? TOKEN_TYPES[:BANG_EQUAL] : TOKEN_TYPES[:BANG])
     when '='
-      add_token(
-        match('=') ? TOKEN_TYPES[:EQUAL_EQUAL] : TOKEN_TYPES[:EQUAL]
-      )
+      token(match('=') ? TOKEN_TYPES[:EQUAL_EQUAL] : TOKEN_TYPES[:EQUAL])
     when '<'
-      add_token(
-        match('=') ? TOKEN_TYPES[:LESS_EQUAL] : TOKEN_TYPES[:LESS]
-      )
+      token(match('=') ? TOKEN_TYPES[:LESS_EQUAL] : TOKEN_TYPES[:LESS])
     when '>'
-      add_token(
-        match('=') ? TOKEN_TYPES[:GREATER_EQUAL] : TOKEN_TYPES[:GREATER]
-      )
+      token(match('=') ? TOKEN_TYPES[:GREATER_EQUAL] : TOKEN_TYPES[:GREATER])
     when '/'
       if match('/')
         advance until peek == "\n" || at_end?
       else
-        add_token(TOKEN_TYPES[:SLASH])
+        token(TOKEN_TYPES[:SLASH])
       end
     when '"'
       string
     else
-      Lox.error(line, "Unexpected character.")
+      LexicalError.new(line, "Unexpected character.")
     end
   end
 
@@ -114,9 +134,9 @@ class Scanner
     curr
   end
 
-  def add_token(type, literal = nil)
+  def token(type, literal = nil)
     lexeme = source[start...current]
-    tokens << Token.new(type, lexeme, literal, line)
+    Token.new(type, lexeme, literal, line)
   end
 
   def match(expected)
@@ -145,15 +165,14 @@ class Scanner
     end
 
     if at_end?
-      Lox.error(line, "Unterminated string.")
-      return
+      return LexicalError.new(line, "Unterminated string.")
     end
 
     # The closing ".
     advance
 
     value = source[(start + 1)...(current - 1)]
-    add_token(TOKEN_TYPES[:STRING], value)
+    token(TOKEN_TYPES[:STRING], value)
   end
 
   def number
@@ -164,7 +183,7 @@ class Scanner
       advance while numeric?(peek)
     end
 
-    add_token(TOKEN_TYPES[:NUMBER], source[start...current].to_f)
+    token(TOKEN_TYPES[:NUMBER], source[start...current].to_f)
   end
 
   def identifier
@@ -173,7 +192,11 @@ class Scanner
     text = source[start...current]
     type = TOKEN_TYPE_KEYWORD_LITERALS[text] || TOKEN_TYPES[:IDENTIFIER]
 
-    add_token(type)
+    token(type)
+  end
+
+  def eof
+    Token.new(TOKEN_TYPES[:EOF], "", nil, line)
   end
 
   def numeric?(char)
