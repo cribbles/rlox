@@ -20,17 +20,17 @@ class Lox
       end
     end
 
-    def run_prompt(stream = true)
+    def run_prompt
       loop do
         print "> "
         break unless line = gets.chomp
-        run line, stream
+        run line
         self.had_error = false
       end
     end
 
-    def run_file(path, stream = true)
-      run File.read(path), stream
+    def run_file(path)
+      run File.read(path)
       exit EXIT_CODES.DATA_ERROR if had_error?
     end
 
@@ -42,15 +42,7 @@ class Lox
       @had_error ||= false
     end
 
-    def run(source, stream)
-      if stream
-        run_stream source
-      else
-        run_sync source
-      end
-    end
-
-    def run_stream(source)
+    def run(source)
       tokens = []
       Scanner.new(source).each_token do |element|
         case element
@@ -62,17 +54,7 @@ class Lox
           next
         end
       end
-      tokens.each &method(:token)
-    end
-
-    def run_sync(source)
-      Scanner.new(source).scan_tokens => { tokens:, errors: }
-      errors.each { |(line, message)| error(line, message) }
-      tokens.each &method(:token)
-    end
-
-    def token(token)
-      puts token
+      tokens.each { |token| puts token }
     end
 
     def error(line, message)

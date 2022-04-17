@@ -52,43 +52,24 @@ class Scanner
     @line = 1
   end
 
-  def scan_tokens
-    tokens = []
-    errors = []
-  
-    scan(
-      token: ->(result) { tokens << result },
-      error: ->(result) { errors << result }
-    )
-  
-    { tokens: tokens, errors: errors }
-  end
-
   def each_token
-    scan(
-      token: ->(result) { yield token: result },
-      error: ->(result) { yield error: result }
-    )
+    until at_end?
+      case result = scan_token
+      when Token
+        yield token: result
+      when LexicalError
+        yield error: result.attributes
+      else
+        next
+      end
+    end
+    yield token: eof
   end
 
   private
 
   attr_reader :source
   attr_accessor :start, :current, :line
-
-  def scan(token:, error:)
-    until at_end?
-      case result = scan_token
-      when Token
-        token.(result)
-      when LexicalError
-        error.(result.attributes)
-      else
-        next
-      end
-    end
-    token.(eof)
-  end
 
   def at_end?
     current >= source.length
